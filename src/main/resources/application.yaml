@@ -1,3 +1,31 @@
 spring:
   application:
     name: extension-blocker
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/extblocker}
+    username: ${DB_USERNAME:dev}
+    password: ${DB_PASSWORD:dev}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      # 업로드된 파일 전체를 메모리에 올려(file.getBytes()) 매직넘버를 검사하므로
+      # 한도를 넉넉하되 무제한은 아니게 잡는다 — 너무 크면 요청 하나가 힙을 과도하게
+      # 점유할 수 있다. 동시에 한 요청은 파일 하나만 받으므로(FileUploadController)
+      # max-request-size를 max-file-size와 같게 둬도 된다.
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: ${PORT:8080}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  upload:
+    dir: ${UPLOAD_DIR:uploads-data}
