@@ -2,14 +2,19 @@
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;
+  --page-bg: #f4f4f7;
+  --card-bg: #fff;
+  --input-bg: #f4f4f7;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  --accent: #ac00ca;
+  --accent-bg: rgba(172, 0, 202, 0.1);
+  --accent-border: rgba(172, 0, 202, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --card-shadow:
+    0 1px 2px rgba(20, 15, 25, 0.04), 0 8px 24px rgba(20, 15, 25, 0.05);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -35,14 +40,19 @@
     --text: #9ca3af;
     --text-h: #f3f4f6;
     --bg: #16171d;
+    --page-bg: #101115;
+    --card-bg: #1c1d24;
+    --input-bg: #26272f;
     --border: #2e303a;
     --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
+    --accent: #d94fee;
+    --accent-bg: rgba(217, 79, 238, 0.15);
+    --accent-border: rgba(217, 79, 238, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --card-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.3);
   }
 
   #social .button-icon {
@@ -51,19 +61,13 @@
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: var(--page-bg);
 }
 
 h1,
@@ -74,13 +78,10 @@ h2 {
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0 0 6px;
 }
 h2 {
   font-size: 24px;
