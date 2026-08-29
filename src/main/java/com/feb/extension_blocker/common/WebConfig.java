@@ -5,14 +5,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
+
 /**
- * 프론트엔드(로컬은 Vite 개발 서버, 배포 후에는 Vercel 도메인)에서 오는 요청을
- * 허용한다. 백엔드/프론트를 별도 저장소·별도 플랫폼(Render/Vercel)으로 배포하기로
- * 한 결정에 따라 브라우저의 동일 출처 정책(CORS)을 명시적으로 풀어줘야 한다.
+ * 프론트엔드와 백엔드가 다른 오리진에서 서빙되므로 CORS를 명시적으로 허용.
  *
- * <p>전체 허용({@code *}) 대신 허용 오리진을 환경변수로 명시 지정한다 — 이 API는
- * 파일 업로드를 다루므로, 임의의 사이트가 이용자 브라우저를 거쳐 요청을 보낼 수
- * 있게 열어두는 건 불필요한 공격 표면이다.
+ * 전체 허용({@code *}) 대신 허용 오리진을 환경변수로 지정(application.yaml)
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -20,7 +18,10 @@ public class WebConfig implements WebMvcConfigurer {
     private final String[] allowedOrigins;
 
     public WebConfig(@Value("${app.cors.allowed-origins}") String allowedOrigins) {
-        this.allowedOrigins = allowedOrigins.split(",");
+        // "," 기준 split 이후 공백이 들어간 경우를 거르기 위해 trim 추가
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .toArray(String[]::new);
     }
 
     @Override
