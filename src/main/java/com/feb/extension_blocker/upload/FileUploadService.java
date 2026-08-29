@@ -34,6 +34,12 @@ public class FileUploadService {
 
     private static final Logger log = LoggerFactory.getLogger(FileUploadService.class);
     private static final char NULL_BYTE = (char) 0;
+    // RTLO(U+202E) 등 유니코드 양방향 서식 제어 문자 범위 — 소스에 직접 그 글자를
+    // 적으면 이 파일 자체가 시각적으로 뒤틀려버리므로 코드 포인트 정수로만 표현한다.
+    private static final int BIDI_CONTROL_RANGE_1_START = 0x202A;
+    private static final int BIDI_CONTROL_RANGE_1_END = 0x202E;
+    private static final int BIDI_CONTROL_RANGE_2_START = 0x2066;
+    private static final int BIDI_CONTROL_RANGE_2_END = 0x2069;
 
     private final ExtensionPolicyService extensionPolicyService;
     private final UploadFileRepository uploadFileRepository;
@@ -59,6 +65,12 @@ public class FileUploadService {
         // -> 원본 그대로 로그에 남기면 Postgres가 null byte를 저장 못 해 예외가 나서 여기서 미리 이스케이프
         if (rawFilename != null && rawFilename.indexOf(NULL_BYTE) >= 0) {
             reject(rawFilename.replace("\0", "\\0"), null, "허용되지 않는 파일명입니다");
+        }
+
+        // RTLO 같은 유니코드 방향 제어 문자로 확장자를 시각적으로 위장하는 파일명은 즉시 거부
+        // -> 예: "invoice[RTLO]cod.exe"가 화면엔 "invoice.exe.doc"처럼 보이게 만드는 기법
+        if (containsBidiControlChar(rawFilename)) {
+            reject(rawFilename, null, "허용되지 않는 파일명입니다");
         }
 
         FilenameAnalyzer analyzer = FilenameAnalyzer.analyze(rawFilename);
@@ -111,6 +123,22 @@ public class FileUploadService {
                 analyzer.basename(), logicalStoredName, realExtension, UploadStatus.SUCCESS, null));
 
         return new UploadSuccessResponse(logicalStoredName, analyzer.basename(), realExtension);
+    }
+
+    /** 파일명에 유니코드 양방향 서식 제어 문자(RTLO 등)가 하나라도 섞여 있는지 검사한다. */
+    private static boolean containsBidiControlChar(String filename) {
+        if (filename == null) {
+            return false;
+        }
+        for (int i = 0; i < filename.length(); i++) {
+            int codePoint = filename.codePointAt(i);
+            boolean inRange1 = codePoint >= BIDI_CONTROL_RANGE_1_START && codePoint <= BIDI_CONTROL_RANGE_1_END;
+            boolean inRange2 = codePoint >= BIDI_CONTROL_RANGE_2_START && codePoint <= BIDI_CONTROL_RANGE_2_END;
+            if (inRange1 || inRange2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void reject(String originalFilename, String realExtension, String reason) {

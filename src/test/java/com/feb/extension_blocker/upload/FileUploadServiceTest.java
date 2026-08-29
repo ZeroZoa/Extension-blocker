@@ -94,6 +94,18 @@ class FileUploadServiceTest {
     }
 
     @Test
+    @DisplayName("RTLO 등 유니코드 방향 제어 문자가 섞인 파일명은 즉시 거부")
+    void rejectsBidiControlCharInFilename() {
+        String rtlo = String.valueOf((char) 0x202E);
+        MockMultipartFile file = new MockMultipartFile("file", "invoice" + rtlo + "cod.exe", "image/jpeg", PNG_HEADER);
+
+        UploadRejectedException e = assertThrows(UploadRejectedException.class, () -> fileUploadService.upload(file));
+
+        assertEquals("허용되지 않는 파일명입니다", e.getMessage());
+        assertNoFilesStored();
+    }
+
+    @Test
     @DisplayName("이중 확장자는 정책 조회 전에 거부")
     void rejectsDoubleExtension() {
         MockMultipartFile file = new MockMultipartFile("file", "invoice.pdf.exe", "application/pdf", PE_HEADER);
