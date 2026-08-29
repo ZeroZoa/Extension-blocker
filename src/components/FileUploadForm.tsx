@@ -34,7 +34,7 @@ export function FileUploadForm() {
     <fieldset>
       <legend>파일 업로드</legend>
       <form className="add-row" onSubmit={handleSubmit}>
-        <input type="file" ref={fileInputRef} aria-label="업로드할 파일" />
+        <input type="file" ref={fileInputRef} aria-label="업로드할 파일" required />
         <button type="submit" disabled={uploading}>
           {uploading ? "업로드 중..." : "업로드"}
         </button>

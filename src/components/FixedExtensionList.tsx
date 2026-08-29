@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getFixedExtensions, patchFixedExtension } from "../api/client";
 import type { FixedExtension } from "../api/types";
 
@@ -7,6 +7,7 @@ export function FixedExtensionList() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const latestRequestId = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     getFixedExtensions()
@@ -17,6 +18,9 @@ export function FixedExtensionList() {
 
   async function toggle(extension: string, nextBlocked: boolean) {
     setToggleError(null);
+    const requestId = (latestRequestId.current.get(extension) ?? 0) + 1;
+    latestRequestId.current.set(extension, requestId);
+
     // 낙관적 업데이트: 서버 응답을 기다리지 않고 즉시 화면에 반영한다. 실패하면
     // 원래 상태로 되돌리고 에러 메시지를 보여준다 — 체크박스처럼 잦은 토글 조작은
     // 매번 로딩 스피너를 보여주는 것보다 이쪽이 자연스럽다.
@@ -26,6 +30,7 @@ export function FixedExtensionList() {
     try {
       await patchFixedExtension(extension, nextBlocked);
     } catch {
+      if (latestRequestId.current.get(extension) !== requestId) return;
       setExtensions((prev) =>
         prev.map((e) => (e.extension === extension ? { ...e, blocked: !nextBlocked } : e)),
       );

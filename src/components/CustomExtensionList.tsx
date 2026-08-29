@@ -11,6 +11,7 @@ export function CustomExtensionList() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     getCustomExtensions()
@@ -20,7 +21,9 @@ export function CustomExtensionList() {
   }, []);
 
   async function handleAdd() {
+    if (!input.trim() || submitting) return;
     setActionError(null);
+    setSubmitting(true);
     try {
       // 최종 판단(trim, 대소문자, 문자셋, 중복, 상한)은 전부 서버가 한다. 여기서는
       // 서버 왕복 없이 즉시 알 수 있는 실수(빈 입력)만 최소한으로 걸러 UX를 돕는다.
@@ -29,6 +32,8 @@ export function CustomExtensionList() {
       setInput("");
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "추가에 실패했습니다");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -59,8 +64,9 @@ export function CustomExtensionList() {
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           placeholder="확장자를 입력해주세요."
           aria-label="커스텀 확장자 입력"
+          disabled={submitting}
         />
-        <button type="button" onClick={handleAdd} disabled={!input.trim()}>
+        <button type="button" onClick={handleAdd} disabled={!input.trim() || submitting}>
           추가
         </button>
       </div>
