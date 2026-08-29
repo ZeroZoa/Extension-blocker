@@ -112,7 +112,7 @@ public class ExtensionPolicyService {
         if (trimmed.isEmpty()
                 || trimmed.length() > CUSTOM_EXTENSION_MAX_LENGTH
                 || !ALPHANUMERIC.matcher(trimmed).matches()) {
-            throw new ExtensionValidationException("영문/숫자만 입력할 수 있습니다");
+            throw new InvalidExtensionFormatException("영문/숫자만 입력할 수 있습니다");
         }
         return trimmed.toLowerCase();
     }

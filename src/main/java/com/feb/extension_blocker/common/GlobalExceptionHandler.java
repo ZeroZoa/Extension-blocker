@@ -1,6 +1,7 @@
 package com.feb.extension_blocker.common;
 
 import com.feb.extension_blocker.extension.ExtensionValidationException;
+import com.feb.extension_blocker.extension.InvalidExtensionFormatException;
 import com.feb.extension_blocker.upload.UploadRejectedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,20 +25,39 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * {@link ExtensionValidationException} -> 409. 값 자체는 유효하지만 기존 데이터와
+     * 충돌할 때의 예외(확장자 중복, 200개 상한 초과 등)
+     */
     @ExceptionHandler(ExtensionValidationException.class)
     public ResponseEntity<ErrorResponse> handleExtensionValidation(ExtensionValidationException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
     }
 
+    /**
+     * {@link InvalidExtensionFormatException} -> 400. 커스텀 확장자 입력값 자체가 형식
+     * 규칙(빈 값, 길이 초과, 영문/숫자 이외 문자)을 어겼을 때의 예외
+     * 충돌이 아니라 애초에 값이 유효하지 않은 경우라 {@link ExtensionValidationException}과 분리함
+     * 409가 아닌 400으로 응답한다.
+     */
+    @ExceptionHandler(InvalidExtensionFormatException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidFormat(InvalidExtensionFormatException e) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+    }
+
+    /**
+     * {@link ResponseStatusException} -> 예외가 이미 들고 있는 상태 코드/사유를 그대로 전달
+     * 서비스 계층에서 "존재하지 않는 고정/커스텀 확장자"처럼 상태 코드가 명확한 경우(404) 예외처리용
+     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException e) {
         return ResponseEntity.status(e.getStatusCode()).body(new ErrorResponse(e.getReason()));
     }
 
     /**
-     * Validation({@code @NotBlank}, {@code @NotNull})이 실패했을 때 Spring이 던지는 예외를 처리
-     * 필드가 여러 개 동시에 실패할 수 있지만, 현재는 한 번에 하나의 사용자 메시지만 보여주는 구조
-     * -> 첫 번째 필드 에러 메시지만 꺼내 반환
+     * {@code @Valid}(예: {@code @NotBlank}, {@code @NotNull}) 검증 실패 -> 400.
+     * 필드가 여러 개 동시에 실패할 수 있지만, 이 API는 한 번에 메시지 하나만 보여주는
+     * 구조라 첫 번째 필드 에러만 꺼내 반환한다.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleInvalidBody(MethodArgumentNotValidException e) {
@@ -48,44 +68,35 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new ErrorResponse(message));
     }
 
-    /**
-     * JSON 파싱 자체가 실패한 경우 처리
-     * {@code @Valid} 개입 전에 발생. 클라이언트의 잘못된 요청이기 때문에 400으로 처리
-     * (안 잡으면 catch-all이 500으로 응답)
-     */
+    /** JSON 파싱 자체가 실패(빈 바디, 문법 오류 등) -> 400. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMalformedBody(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest().body(new ErrorResponse("요청 본문을 읽을 수 없습니다"));
     }
 
-    /**
-     * 경로 변수를 선언된 타입으로 변환 실패(예: {@code Long} 자리에 {@code /custom/abc}) 처리
-     * 클라이언트의 잘못된 요청이기 때문에 400으로 처리 (안 잡으면 catch-all이 500으로 응답)
-     */
+    /** 경로 변수 타입 변환 실패(예: {@code Long} 자리에 {@code /custom/abc}) -> 400. */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.badRequest().body(new ErrorResponse("요청 값의 형식이 올바르지 않습니다"));
     }
 
+    /**
+     * {@link UploadRejectedException} -> 422. 요청 형식(JSON, multipart 등) 자체는 정상이지만
+     * 파일 내용이 검증 규칙을 위반해 처리할 수 없다는 의미라 422
+     */
     @ExceptionHandler(UploadRejectedException.class)
     public ResponseEntity<ErrorResponse> handleUploadRejected(UploadRejectedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(new ErrorResponse(e.getMessage()));
     }
 
-    /**
-     * 업로드 파일이 {@code max-file-size}를 넘었을 때 처리
-     * 허용 크기를 초과한 요청이기 때문에 413으로 처리 (안 잡으면 catch-all이 500으로 응답)
-     */
+    /** 업로드 크기가 {@code max-file-size} 초과 -> 413. */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleTooLarge(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
                 .body(new ErrorResponse("파일 크기가 너무 큽니다"));
     }
 
-    /**
-     * 위 핸들러들이 못 잡는 모든 예외(DB 커넥션 실패, NPE 등)의 최종 방어선
-     * -> 원인은 로그에만 남기고, 클라이언트에는 일반 메시지만 반환(내부 정보 노출 방지)
-     */
+    /** 위에서 안 잡힌 모든 예외(DB 커넥션 실패, NPE 등)의 최종 방어선 -> 500(원인은 로그에만, 클라이언트엔 일반 메시지). */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         log.error("처리되지 않은 예외 발생", e);
