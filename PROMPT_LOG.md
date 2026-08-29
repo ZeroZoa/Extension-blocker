@@ -65,6 +65,26 @@ AI가 처음엔 두 화면(정책관리/업로드)을 라우터나 탭으로 분
 
 Dockerfile이 없다는 걸 AI가 먼저 짚었고, 멀티스테이지 빌드로 작성한 뒤 로컬에서 실제로 `docker build` + 컨테이너 기동 + API 응답까지 직접 검증했다(문서에만 "될 것이다"라고 적지 않고 실제로 띄워봄). 이 과정에서 `uploads-data/`가 `.gitignore`에 빠져 있어 로컬 테스트 파일이 커밋될 뻔한 것도 미리 발견해 고쳤다.
 
+## 15. 400과 409의 세분화 — "형식 오류"와 "데이터 충돌"은 다른 상태 코드
+
+확장자 값 자체가 형식을 어긴 경우(빈 값, 길이 초과, 특수문자)와 이미 존재하는 값과 충돌하는 경우(중복, 200개 상한 초과)가 같은 `ExtensionValidationException`으로 묶여 있어 전부 409로 응답되고 있다는 걸 리뷰 중 짚었다. "요청 자체가 틀렸다"(400)와 "요청은 맞는데 지금 상태와 충돌한다"(409)는 클라이언트 입장에서 처리 방식이 다른 정보라, 형식 오류 전용 `InvalidExtensionFormatException`(400)을 새로 분리했다.
+
+## 16. `extension`/`upload` 도메인 전체 재검수 — "면접에서 서비스 쪽을 한 줄 단위로 물어볼 것"
+
+"면접에서 서비스 쪽 부분을 자세히 물어볼 거니까 메서드 단위, 더 나아가 코드 한 줄 단위로 검수하자"는 요구에 따라 common → extension → upload 순서로 도메인 전체를 다시 훑었다. 매 파일마다 발견 사항을 먼저 제시하고 사용자가 판단한 뒤에만 반영하는 방식으로 진행했고("이건 내가 너와 같이 판단하는거니까 바로 수정하지 말고 나랑 같이 보자"), Javadoc은 요약이 아니라 "왜 이렇게 했는가"가 남도록 다시 썼다. `ddl-auto`를 `none`에서 `validate`로 바꿔 전체 테스트로 검증했고, `ExtensionPolicyService`에 경계값·정책 우선순위·경쟁 상태를 포함한 단위테스트 18개를 새로 추가했다.
+
+## 17. 리뷰 중 실제로 재현해서 잡은 버그 두 건
+
+코드만 읽고 넘어가지 않고 두 버그를 직접 재현해서 확인했다.
+
+첫째, `FileSignatureDetector`가 미지의 바이너리에 대해 파일명이 주장한 확장자를 길이 제한 없이 그대로 반환하는 경로가 있어, 21자 이상의 확장자를 주장하는 정상 파일이 `upload_file.detected_extension VARCHAR(20)` 컬럼 INSERT 실패로 500 에러가 나는 걸 바이트 단위로 재구성해 확인했다. 근본 원인(`FilenameAnalyzer`가 확장자 길이 제한 없이 인정)과 방어선(`UploadFile`의 저장 직전 truncate) 양쪽에서 고쳤다.
+
+둘째, 로컬에 앱을 직접 띄우고(`gradlew bootRun`) `curl`로 `file` 파트를 빼고 요청해보니, `Content-Type`이 애초에 multipart가 아닌 경우(`MultipartException`)와 multipart는 맞지만 `file` 필드만 없는 경우(`MissingServletRequestPartException`) 둘 다 `GlobalExceptionHandler`의 catch-all(`Exception.class`)에 걸려 500으로 응답되는 걸 확인했다. 명백한 클라이언트 요청 오류인데 500(서버 오류)이 나가는 건 잘못됐다고 판단해 전용 핸들러 두 개를 추가하고, 수정 후 다시 같은 `curl` 요청으로 400이 되는 걸 재검증했다.
+
+## 18. 상태 코드 일관성 정리 — 201 vs 200
+
+`ExtensionPolicyController`의 리소스 생성 POST(`addCustomExtension`)는 `@ResponseStatus(CREATED)`로 201을 명시하는데, `FileUploadController.upload()`는 같은 성격(파일 + 이력 레코드 생성)의 POST인데도 별도 지정 없이 기본값인 200으로 응답하고 있었다. 두 컨트롤러를 나란히 비교하다 발견해 201로 통일했고, 프론트가 `response.ok`(200~299 전체)만 검사해 상태 코드 변경에 영향받지 않는 것도 코드로 확인했다.
+
 ---
 
 ## 사용한 스킬/도구/MCP
@@ -89,6 +109,8 @@ Dockerfile이 없다는 걸 AI가 먼저 짚었고, 멀티스테이지 빌드로
 - Null byte injection 방어 + DB 저장 시 이스케이프 필요성
 - `boolean`→`Boolean` 침묵 실패
 - CORS 설정 누락(실제 브라우저 테스트로 발견)
+- 확장자/파일명 길이 초과로 인한 컬럼 INSERT 실패 → 500 (바이트 단위로 재구성해 확인)
+- 필수 파일 파트 누락 시 500 응답(실제 `curl` 요청으로 재현 후 400으로 수정)
 
 **그대로 안 쓰고 고쳐 쓴 것**
 - Flyway → schema.sql (배포 속도 우선 판단으로 되돌림)
