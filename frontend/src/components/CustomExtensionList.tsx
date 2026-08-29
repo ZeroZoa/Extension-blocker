@@ -25,8 +25,6 @@ export function CustomExtensionList() {
     setActionError(null);
     setSubmitting(true);
     try {
-      // 최종 판단(trim, 대소문자, 문자셋, 중복, 상한)은 전부 서버가 한다. 여기서는
-      // 서버 왕복 없이 즉시 알 수 있는 실수(빈 입력)만 최소한으로 걸러 UX를 돕는다.
       const created = await addCustomExtension(input.trim());
       setExtensions((prev) => [...prev, created]);
       setInput("");

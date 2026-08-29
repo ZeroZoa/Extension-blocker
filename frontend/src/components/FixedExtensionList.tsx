@@ -20,10 +20,6 @@ export function FixedExtensionList() {
     setToggleError(null);
     const requestId = (latestRequestId.current.get(extension) ?? 0) + 1;
     latestRequestId.current.set(extension, requestId);
-
-    // 낙관적 업데이트: 서버 응답을 기다리지 않고 즉시 화면에 반영한다. 실패하면
-    // 원래 상태로 되돌리고 에러 메시지를 보여준다 — 체크박스처럼 잦은 토글 조작은
-    // 매번 로딩 스피너를 보여주는 것보다 이쪽이 자연스럽다.
     setExtensions((prev) =>
       prev.map((e) => (e.extension === extension ? { ...e, blocked: nextBlocked } : e)),
     );
