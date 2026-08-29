@@ -22,90 +22,97 @@ import java.util.regex.Pattern;
 @Service
 public class ExtensionPolicyService {
 
+    /** 커스텀 확장자 입력 최대 길이 20자 */
     private static final int CUSTOM_EXTENSION_MAX_LENGTH = 20;
+    /** 커스텀 확장자 최대 200개까지 추가 가능 */
     private static final int CUSTOM_EXTENSION_MAX_COUNT = 200;
+    /** Pattern은 한 번만 컴파일하여 재사용 */
     private static final Pattern ALPHANUMERIC = Pattern.compile("^[A-Za-z0-9]+$");
 
-    private final ExtensionPolicyRepository repository;
+    private final ExtensionPolicyRepository extensionPolicyRepository;
 
-    public ExtensionPolicyService(ExtensionPolicyRepository repository) {
-        this.repository = repository;
+    public ExtensionPolicyService(ExtensionPolicyRepository extensionPolicyRepository) {
+        this.extensionPolicyRepository = extensionPolicyRepository;
     }
 
+    /** 고정 확장자 조회 */
     public List<ExtensionPolicy> getFixedExtensions() {
-        return repository.findByTypeOrderByIdAsc(ExtensionType.FIXED);
+        return extensionPolicyRepository.findByTypeOrderByIdAsc(ExtensionType.FIXED);
     }
 
+    /** 커스텀 확장자 조회 */
     public List<ExtensionPolicy> getCustomExtensions() {
-        return repository.findByTypeOrderByIdAsc(ExtensionType.CUSTOM);
+        return extensionPolicyRepository.findByTypeOrderByIdAsc(ExtensionType.CUSTOM);
     }
 
     /**
-     * 현재 차단 중인 확장자 전체 집합: 체크된 FIXED 행 ∪ 모든 CUSTOM 행
-     * (CUSTOM은 존재하는 것 자체가 차단을 의미한다).
+     * 현재 차단 중인 확장자 전체 집합: 체크된 FIXED 행 + CUSTOM은 모든 행
      */
     public Set<String> getCurrentlyBlockedExtensions() {
         Set<String> blocked = new HashSet<>();
-        repository.findByType(ExtensionType.FIXED).stream()
+        extensionPolicyRepository.findByTypeOrderByIdAsc(ExtensionType.FIXED).stream()
                 .filter(ExtensionPolicy::isBlocked)
                 .map(ExtensionPolicy::getExtension)
                 .forEach(blocked::add);
-        repository.findByType(ExtensionType.CUSTOM).stream()
+        extensionPolicyRepository.findByTypeOrderByIdAsc(ExtensionType.CUSTOM).stream()
                 .map(ExtensionPolicy::getExtension)
                 .forEach(blocked::add);
         return blocked;
     }
 
+    /**
+     * 고정 확장자 설정(체크)
+     */
     @Transactional
     public ExtensionPolicy setFixedBlocked(String extension, boolean blocked) {
-        ExtensionPolicy fixed = repository.findByTypeAndExtensionIgnoreCase(ExtensionType.FIXED, extension)
+        ExtensionPolicy fixed = extensionPolicyRepository.findByTypeAndExtensionIgnoreCase(ExtensionType.FIXED, extension)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 고정 확장자입니다"));
         fixed.setBlocked(blocked);
-        return repository.save(fixed);
+        return extensionPolicyRepository.save(fixed);
     }
 
     /**
-     * {@code rawInput}을 정규화한 뒤 고정/커스텀 충돌 여부와 200개 상한을 검사하고 저장한다.
+     * {@code rawInput}을 검증 순서대로 통과시킨 뒤 커스텀 확장자로 저장한다.
      *
-     * <p>위 검사들은 insert 이전에 이루어지는 일반적인 읽기 연산이라서, 같은 확장자를
-     * 추가하는 두 요청이 동시에 들어오면 둘 다 커밋 전에 모든 검사를 통과해버릴 수 있다 —
-     * 이건 가정이 아니라 실제로 발생 가능한 경쟁 상태(race condition)다. 이를 실질적으로
-     * 막아주는 건 DB의 대소문자 무시 유니크 인덱스이고, 아래의
-     * {@link DataIntegrityViolationException} catch 구문은 그 DB 레벨 거부를 사전 검사와
-     * 동일한 사용자 메시지로 변환해줄 뿐이다.
+     * <ol>
+     *   <li>{@link #normalize}로 공백 제거 및 영문/숫자 이외 문자를 걸러낸다.</li>
+     *   <li>고정 확장자와 겹치는지, 이미 등록된 커스텀 확장자인지 검사한다.</li>
+     *   <li>커스텀 확장자가 200개 상한을 넘었는지 검사한다.</li>
+     * </ol>
      */
     @Transactional
     public ExtensionPolicy addCustomExtension(String rawInput) {
         String normalized = normalize(rawInput);
 
-        if (repository.existsByTypeAndExtensionIgnoreCase(ExtensionType.FIXED, normalized)) {
+        if (extensionPolicyRepository.existsByTypeAndExtensionIgnoreCase(ExtensionType.FIXED, normalized)) {
             throw new ExtensionValidationException("고정 확장자에 있는 확장자입니다");
         }
-        if (repository.existsByTypeAndExtensionIgnoreCase(ExtensionType.CUSTOM, normalized)) {
+        if (extensionPolicyRepository.existsByTypeAndExtensionIgnoreCase(ExtensionType.CUSTOM, normalized)) {
             throw new ExtensionValidationException("이미 등록된 확장자입니다");
         }
-        if (repository.countByType(ExtensionType.CUSTOM) >= CUSTOM_EXTENSION_MAX_COUNT) {
+        if (extensionPolicyRepository.countByType(ExtensionType.CUSTOM) >= CUSTOM_EXTENSION_MAX_COUNT) {
             throw new ExtensionValidationException("최대 200개까지 등록할 수 있습니다");
         }
 
         try {
-            return repository.save(new ExtensionPolicy(normalized, ExtensionType.CUSTOM, true));
+            return extensionPolicyRepository.save(new ExtensionPolicy(normalized, ExtensionType.CUSTOM, true));
         } catch (DataIntegrityViolationException raceLostToConcurrentInsert) {
+            // 이 catch 자체는 경쟁 상태를 막지 않음
+            // 대신 DB 유니크 인덱스가 막음
             throw new ExtensionValidationException("이미 등록된 확장자입니다");
         }
     }
 
     @Transactional
     public void deleteCustomExtension(Long id) {
-        ExtensionPolicy custom = repository.findByIdAndType(id, ExtensionType.CUSTOM)
+        ExtensionPolicy custom = extensionPolicyRepository.findByIdAndType(id, ExtensionType.CUSTOM)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 커스텀 확장자입니다"));
-        repository.delete(custom);
+        extensionPolicyRepository.delete(custom);
     }
 
     /**
-     * 공백을 trim하고 빈 값/길이초과/영문+숫자 이외 문자를 거부한 뒤 소문자로 변환한다.
-     * 이렇게 하면 저장되는 모든 확장자와 모든 비교가 "관례상"이 아니라 "구조적으로"
-     * 대소문자 무시가 된다.
+     * 공백을 trim하고 빈 값/길이초과/영문+숫자 이외 문자를 거부하고 소문자로 변환
+     * 결과적으로 저장되는 모든 확장자와 모든 비교가 구조적으로 대소문자 무시
      */
     private String normalize(String rawInput) {
         String trimmed = rawInput == null ? "" : rawInput.trim();

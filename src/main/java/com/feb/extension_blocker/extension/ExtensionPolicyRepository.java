@@ -8,13 +8,12 @@ import java.util.Optional;
 /**
  * {@link ExtensionPolicy}에 대한 데이터 접근 계층.
  * 고정/커스텀 행은 같은 테이블을 쓰지만 관리 규칙이 완전히 다르기 때문에,
- * 모든 조회 메서드는 {@link ExtensionType}으로 범위를 한정한다.
+ * 이 인터페이스에 직접 선언한 커스텀 조회 메서드는 전부 {@link ExtensionType}으로 범위를 한정
+ * (상속받은 {@code JpaRepository}의 기본 메서드는 예외).
  */
 public interface ExtensionPolicyRepository extends JpaRepository<ExtensionPolicy, Long> {
 
     List<ExtensionPolicy> findByTypeOrderByIdAsc(ExtensionType type);
-
-    List<ExtensionPolicy> findByType(ExtensionType type);
 
     Optional<ExtensionPolicy> findByTypeAndExtensionIgnoreCase(ExtensionType type, String extension);
 
