@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -94,7 +95,7 @@ class FileUploadServiceTest {
     }
 
     @Test
-    @DisplayName("RTLO 등 유니코드 방향 제어 문자가 섞인 파일명은 즉시 거부")
+    @DisplayName("RTLO 등 유니코드 방향 제어 문자가 섞인 파일명은 즉시 거부하고, 이력엔 치환된 표기로 남긴다")
     void rejectsBidiControlCharInFilename() {
         String rtlo = String.valueOf((char) 0x202E);
         MockMultipartFile file = new MockMultipartFile("file", "invoice" + rtlo + "cod.exe", "image/jpeg", PNG_HEADER);
@@ -103,6 +104,10 @@ class FileUploadServiceTest {
 
         assertEquals("허용되지 않는 파일명입니다", e.getMessage());
         assertNoFilesStored();
+
+        ArgumentCaptor<UploadFile> saved = ArgumentCaptor.forClass(UploadFile.class);
+        verify(uploadFileRepository).save(saved.capture());
+        assertEquals("invoice[U+202E]cod.exe", saved.getValue().getOriginalFilename());
     }
 
     @Test

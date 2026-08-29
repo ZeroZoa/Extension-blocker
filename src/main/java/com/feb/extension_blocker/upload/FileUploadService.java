@@ -36,10 +36,12 @@ public class FileUploadService {
     private static final char NULL_BYTE = (char) 0;
     // RTLO(U+202E) 등 유니코드 양방향 서식 제어 문자 범위 — 소스에 직접 그 글자를
     // 적으면 이 파일 자체가 시각적으로 뒤틀려버리므로 코드 포인트 정수로만 표현한다.
-    private static final int BIDI_CONTROL_RANGE_1_START = 0x202A;
-    private static final int BIDI_CONTROL_RANGE_1_END = 0x202E;
-    private static final int BIDI_CONTROL_RANGE_2_START = 0x2066;
-    private static final int BIDI_CONTROL_RANGE_2_END = 0x2069;
+    // 임베딩/오버라이드 계열(LRE, RLE, PDF, LRO, RLO)
+    private static final int BIDI_EMBEDDING_OVERRIDE_START = 0x202A;
+    private static final int BIDI_EMBEDDING_OVERRIDE_END = 0x202E;
+    // 아이솔레이트 계열(LRI, RLI, FSI, PDI)
+    private static final int BIDI_ISOLATE_START = 0x2066;
+    private static final int BIDI_ISOLATE_END = 0x2069;
 
     private final ExtensionPolicyService extensionPolicyService;
     private final UploadFileRepository uploadFileRepository;
@@ -68,9 +70,9 @@ public class FileUploadService {
         }
 
         // RTLO 같은 유니코드 방향 제어 문자로 확장자를 시각적으로 위장하는 파일명은 즉시 거부
-        // -> 예: "invoice[RTLO]cod.exe"가 화면엔 "invoice.exe.doc"처럼 보이게 만드는 기법
+        // -> 원본 그대로 남기면 그 문자가 로그/이력까지 시각적으로 뒤틀어버리므로 [U+XXXX] 표기로 치환
         if (containsBidiControlChar(rawFilename)) {
-            reject(rawFilename, null, "허용되지 않는 파일명입니다");
+            reject(sanitizeBidiControlChars(rawFilename), null, "허용되지 않는 파일명입니다");
         }
 
         FilenameAnalyzer analyzer = FilenameAnalyzer.analyze(rawFilename);
@@ -131,14 +133,31 @@ public class FileUploadService {
             return false;
         }
         for (int i = 0; i < filename.length(); i++) {
-            int codePoint = filename.codePointAt(i);
-            boolean inRange1 = codePoint >= BIDI_CONTROL_RANGE_1_START && codePoint <= BIDI_CONTROL_RANGE_1_END;
-            boolean inRange2 = codePoint >= BIDI_CONTROL_RANGE_2_START && codePoint <= BIDI_CONTROL_RANGE_2_END;
-            if (inRange1 || inRange2) {
+            if (isBidiControlChar(filename.charAt(i))) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** 제어 문자를 {@code [U+XXXX]} 표기로 바꿔, 로그/이력에 남아도 시각 위장 재발을 방지 */
+    private static String sanitizeBidiControlChars(String filename) {
+        StringBuilder sanitized = new StringBuilder();
+        for (int i = 0; i < filename.length(); i++) {
+            char c = filename.charAt(i);
+            if (isBidiControlChar(c)) {
+                sanitized.append(String.format("[U+%04X]", (int) c));
+            } else {
+                sanitized.append(c);
+            }
+        }
+        return sanitized.toString();
+    }
+
+    private static boolean isBidiControlChar(char c) {
+        boolean isEmbeddingOrOverride = c >= BIDI_EMBEDDING_OVERRIDE_START && c <= BIDI_EMBEDDING_OVERRIDE_END;
+        boolean isIsolate = c >= BIDI_ISOLATE_START && c <= BIDI_ISOLATE_END;
+        return isEmbeddingOrOverride || isIsolate;
     }
 
     private void reject(String originalFilename, String realExtension, String reason) {
