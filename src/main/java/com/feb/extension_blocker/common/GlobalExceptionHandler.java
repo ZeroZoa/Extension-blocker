@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * {@link UploadRejectedException} -> 422. 요청 형식(JSON, multipart 등) 자체는 정상이지만
+     * {@link UploadRejectedException} -> 422. 요청 형식 자체는 정상이지만
      * 파일 내용이 검증 규칙을 위반해 처리할 수 없다는 의미라 422
      */
     @ExceptionHandler(UploadRejectedException.class)
@@ -94,7 +94,7 @@ public class GlobalExceptionHandler {
     /** 요청 자체가 멀티파트 형식이 아님 -> 400. */
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ErrorResponse> handleNotMultipart(MultipartException e) {
-        return ResponseEntity.badRequest().body(new ErrorResponse("파일이 첨부되지 않았습니다"));
+        return ResponseEntity.badRequest().body(new ErrorResponse("요청이 파일 업로드 형식이 아닙니다"));
     }
 
     /** 멀티파트 요청은 맞지만 필수 파트({@code file})가 없음 -> 400. */

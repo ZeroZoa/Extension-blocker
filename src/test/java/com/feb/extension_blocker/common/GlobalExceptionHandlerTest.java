@@ -27,7 +27,7 @@ class GlobalExceptionHandlerTest {
                 handler.handleNotMultipart(new MultipartException("Current request is not a multipart request"));
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("파일이 첨부되지 않았습니다", response.getBody().message());
+        assertEquals("요청이 파일 업로드 형식이 아닙니다", response.getBody().message());
     }
 
     @Test
