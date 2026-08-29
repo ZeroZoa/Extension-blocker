@@ -79,6 +79,29 @@ class FilenameAnalyzerTest {
     }
 
     @Test
+    @DisplayName("끝 토큰이 20자를 넘으면 확장자를 주장하지 않은 것으로 처리")
+    void overlongExtensionTokenIsNotClaimed() {
+        // FileSignatureDetector가 미지 바이너리에 대해 claimed를 길이 제한 없이 그대로
+        // 돌려주는 경로가 있어, 여기서 걸러두지 않으면 그 값이 UploadFile.detectedExtension
+        // (VARCHAR(20))에 그대로 들어가려다 저장이 실패하는 문제가 있었다.
+        FilenameAnalyzer analyzer = FilenameAnalyzer.analyze("weird." + "a".repeat(21));
+
+        assertFalse(analyzer.hasExtension(), "20자를 넘는 끝 토큰은 확장자로 인정하지 않아야 한다");
+        assertTrue(analyzer.needsSpecialNaming());
+    }
+
+    @Test
+    @DisplayName("정확히 20자인 끝 토큰은 경계값으로 확장자로 인정")
+    void exactlyMaxLengthExtensionIsClaimed() {
+        String extension20 = "a".repeat(20);
+
+        FilenameAnalyzer analyzer = FilenameAnalyzer.analyze("file." + extension20);
+
+        assertTrue(analyzer.hasExtension());
+        assertEquals(extension20, analyzer.claimedExtension());
+    }
+
+    @Test
     @DisplayName("경로 구분자가 섞여 있어도 마지막 구분자 이후만 파일명으로 취급")
     void directoryIsStripped() {
         FilenameAnalyzer unix = FilenameAnalyzer.analyze("some/path/report.pdf");

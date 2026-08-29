@@ -12,17 +12,14 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.NonNull;
 
 /**
  * 업로드 시도 한 건(성공/거부)의 이력.
+ * SLF4J 로그로도 남기지만, 검색·집계가 쉽도록 이 테이블을 따로 설계
  *
- * <p>같은 정보를 애플리케이션 로그(SLF4J)에도 남기지만, 로그는 검색·집계가 번거롭고
- * 배포 환경에 따라 보존 기간이 짧을 수 있다. 이 테이블은 "최근에 어떤 확장자가 자주
- * 차단됐는지"류의 질문에 SQL로 바로 답할 수 있게 해주는, 로그와는 목적이 다른
- * 운영 자산이다.
- *
- * <p>업로드 목록 조회·다운로드 API는 만들지 않는다 — 과제 범위에 없는 기능이라
- * 이 테이블은 순수하게 쓰기 전용(write-only) 이력으로만 쓰인다.
+ * <p>업로드 목록 조회·다운로드 API는 만들지 않음 -> 과제 범위 밖이라고 판단
+ * 이 테이블은 쓰기 전용 이력으로만 쓰임
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -50,12 +47,18 @@ public class UploadFile extends BaseTimeEntity {
     @Column(name = "reject_reason", length = 255)
     private String rejectReason;
 
-    public UploadFile(String originalFilename, String storedFilename, String detectedExtension,
-                       UploadStatus status, String rejectReason) {
-        this.originalFilename = originalFilename;
+    public UploadFile(@NonNull String originalFilename, String storedFilename, String detectedExtension,
+                       @NonNull UploadStatus status, String rejectReason) {
+        // null byte 방어 경로는 FilenameAnalyzer를 거치기 전 원본을 그대로 전달 -> 500자 초과를 방어
+        this.originalFilename = truncate(originalFilename, 500);
         this.storedFilename = storedFilename;
-        this.detectedExtension = detectedExtension;
+        // 미지 바이너리는 claimed 확장자를 길이 제한 없이 반환 가능(FileSignatureDetector) -> 20자 초과를 방어
+        this.detectedExtension = truncate(detectedExtension, 20);
         this.status = status;
         this.rejectReason = rejectReason;
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value != null && value.length() > maxLength ? value.substring(0, maxLength) : value;
     }
 }

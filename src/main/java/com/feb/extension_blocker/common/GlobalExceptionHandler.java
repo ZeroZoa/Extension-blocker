@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -87,6 +89,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UploadRejectedException.class)
     public ResponseEntity<ErrorResponse> handleUploadRejected(UploadRejectedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(new ErrorResponse(e.getMessage()));
+    }
+
+    /** 요청 자체가 멀티파트 형식이 아님 -> 400. */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleNotMultipart(MultipartException e) {
+        return ResponseEntity.badRequest().body(new ErrorResponse("파일이 첨부되지 않았습니다"));
+    }
+
+    /** 멀티파트 요청은 맞지만 필수 파트({@code file})가 없음 -> 400. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingFilePart(MissingServletRequestPartException e) {
+        return ResponseEntity.badRequest().body(new ErrorResponse("파일이 첨부되지 않았습니다"));
     }
 
     /** 업로드 크기가 {@code max-file-size} 초과 -> 413. */

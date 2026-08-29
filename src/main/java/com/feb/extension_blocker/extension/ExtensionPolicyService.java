@@ -22,8 +22,14 @@ import java.util.regex.Pattern;
 @Service
 public class ExtensionPolicyService {
 
-    /** 커스텀 확장자 입력 최대 길이 20자 */
-    private static final int CUSTOM_EXTENSION_MAX_LENGTH = 20;
+    /**
+     * 커스텀 확장자 입력 최대 길이 20자. {@code public}인 이유: 업로드 파이프라인의
+     * {@link com.feb.extension_blocker.upload.FilenameAnalyzer}가 "등록 가능한 확장자
+     * 길이"와 "파일명에서 확장자로 인정하는 길이" 기준을 일부러 동일하게 맞추면서 이
+     * 상수를 그대로 참조한다 — 두 값이 각자 하드코딩되어 있으면 한쪽만 바뀌었을 때
+     * 조용히 어긋날 수 있다.
+     */
+    public static final int CUSTOM_EXTENSION_MAX_LENGTH = 20;
     /** 커스텀 확장자 최대 200개까지 추가 가능 */
     private static final int CUSTOM_EXTENSION_MAX_COUNT = 200;
     /** Pattern은 한 번만 컴파일하여 재사용 */

@@ -3,26 +3,24 @@ package com.feb.extension_blocker.upload;
 import java.util.Set;
 
 /**
- * 업로드된 파일의 실제 형식을 콘텐츠 바이트만으로 판별한다(클라이언트가 보낸 MIME
- * 타입은 절대 참고하지 않는다).
+ * 업로드된 파일의 실제 형식을 콘텐츠 바이트만으로 판별
+ * (클라이언트가 보낸 MIME 타입은 절대 참고하지 않음)
  *
  * <p>세 계열은 콘텐츠만으로는 그 안의 개별 확장자를 구분할 수 없다:
  * <ul>
- *   <li>PE 계열({@code exe, com, scr, cpl}) — 전부 동일한 Windows PE(MZ) 헤더를 쓴다.</li>
- *   <li>텍스트 계열({@code js, bat, cmd, txt, ...}) — 매직 넘버 자체가 없는 평문이다.</li>
+ *   <li>PE 계열({@code exe, com, scr, cpl}) — 전부 동일한 Windows PE(MZ) 헤더를 사용</li>
+ *   <li>텍스트 계열({@code js, bat, cmd, txt, ...}) — 매직 넘버 자체가 없는 평문</li>
  *   <li>ZIP 계열({@code zip, docx, xlsx, pptx, jar}) — Office Open XML 포맷(docx 등)은
- *       내부적으로 ZIP 컨테이너라 순수 zip과 바이트 시그니처가 동일하다.</li>
+ *       내부적으로 ZIP 컨테이너라 순수 zip과 바이트 시그니처가 동일</li>
  * </ul>
  * 이 세 계열은, 콘텐츠가 그 계열에 속함을 확인한 뒤 파일명이 주장하는 확장자가 그
  * 계열의 합리적인 멤버면 그대로 실제 확장자로 인정하고, 계열 밖의 확장자를 주장하면
- * (예: 실제로는 PE인데 이름은 {@code report.jpg}) 계열 대표값으로 판별해 위장 검사에서
- * 걸리게 한다.
+ * 계열 대표값으로 판별 후 위장 검사에서 필터링
  *
  * <p>위 세 계열에도, 명확한 개별 시그니처(PNG/JPG 등)에도 해당하지 않는 완전히 미지의
- * 바이너리는 — 판단할 근거가 없으므로 — 파일명이 주장하는 확장자를 그대로 인정한다.
- * 그렇지 않으면 시그니처를 등록해두지 않은 모든 정상 포맷이 전부 "위장"으로 오판되어
- * 차단되며, 이는 과제가 요구한 "확장자 블랙리스트" 모델을 "우리가 아는 포맷만
- * 허용하는 화이트리스트" 모델로 바꿔버리는 과도한 차단이다.
+ * 바이너리는 파일명이 주장하는 확장자를 그대로 인정 -> 판단할 근거가 없기 때문.
+ * 그렇지 않으면 시그니처를 등록해두지 않은 모든 정상 포맷이 전부 위장으로 오판되며,
+ * 이는 확장자 "블랙리스트" 모델이 아닌 "화이트리스트" 모델로 변질되는 것과 같다
  */
 final class FileSignatureDetector {
 
@@ -56,9 +54,7 @@ final class FileSignatureDetector {
             return resolveFamilyMember(claimedExtension, TEXT_FAMILY, "txt");
         }
 
-        // 어떤 계열에도, 어떤 개별 시그니처에도 해당하지 않는 미지의 바이너리.
-        // 증거가 없으니 claimed를 그대로 인정하고, claimed조차 없으면(확장자 없는
-        // 파일) 5단계 특수 파일명 치환에서 쓸 대표값으로 "bin"을 반환한다.
+        // 미지 바이너리는 증거가 없으니 claimed를 그대로 인정, 없으면 대표값 "bin" 반환
         return claimedExtension != null ? claimedExtension : "bin";
     }
 
@@ -83,6 +79,11 @@ final class FileSignatureDetector {
         return true;
     }
 
+    /**
+     * 콘텐츠 앞부분(최대 8192바이트)이 텍스트와 유사한지 휴리스틱 기법으로 판단
+     * 0x80 이상 바이트도 출력 가능 판단 -> UTF-8 멀티바이트 문자 때문임
+     * 95% 기준은 완벽한 판별이 불가능한 휴리스틱이라 약간의 여윳값을 할당
+     */
     private static boolean looksLikeText(byte[] content) {
         int sampleSize = Math.min(content.length, 8192);
         if (sampleSize == 0) {

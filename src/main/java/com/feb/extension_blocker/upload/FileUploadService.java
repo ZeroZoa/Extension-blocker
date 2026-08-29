@@ -18,17 +18,16 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 업로드된 파일을 검증 순서대로 검사하고 저장한다.
+ * 업로드된 파일을 검증 순서대로 검사하고 저장
  *
- * <p>검증은 하나라도 실패하면 그 즉시 거부하고 이후 단계는 수행하지 않는다. 특히
- * 5단계(특수 파일명 치환)는 1~4단계를 전부 통과한 파일에만 적용된다 — 즉 이름을
- * 바꾼다고 차단 정책을 우회할 수 없다.
+ * <p>검증은 하나라도 실패하면 그 즉시 거부하고 이후 단계는 수행하지 않음
+ * 5단계(특수 파일명 치환)는 1~4단계를 전부 통과한 파일에만 적용
+ * 결과적으로 이름을 바꾼다고 차단 정책을 우회할 수 없도록 함
  *
  * <p>물리 저장(파일시스템 write)과 이력 저장(DB insert)은 하나의 트랜잭션으로 묶여있지
- * 않다. 파일 write는 성공했는데 그 직후 DB insert가 실패하면, 디스크에는 파일이
- * 남고 이력에는 기록이 안 남는 불일치가 이론적으로 가능하다. 이걸 완전히 막으려면
- * 아웃박스 패턴 같은 분산 트랜잭션 처리가 필요한데, 과제 규모 대비 과한 설계라
- * 판단해 의도적으로 다루지 않았다.
+ * 않음 — file write는 성공했는데 DB insert가 실패하면 디스크엔 파일이 남고 이력엔
+ * 기록이 안 남는 불일치가 이론적으로 가능함. 해결하려면 아웃박스 패턴 같은 분산
+ * 트랜잭션 처리가 필요하지만 과제 규모와 기간 대비 과한 설계라 판단
  */
 @Service
 public class FileUploadService {
@@ -56,12 +55,8 @@ public class FileUploadService {
     public UploadSuccessResponse upload(MultipartFile file) {
         String rawFilename = file.getOriginalFilename();
 
-        // 파일명에 null byte가 섞여있으면(과거 "shell.php\0.jpg" 류의 업로드 우회
-        // 기법) 이후 어떤 이름/경로 처리도 하지 않고 즉시 거부한다. 이력에 원본
-        // 파일명을 남기기 전에 null byte를 이스케이프하는데, PostgreSQL의 text 계열
-        // 컬럼은 문자열 안에 null byte(0x00)를 저장할 수 없어 원본 그대로 insert하면
-        // DB 예외가 나기 때문이다 — 보안 로그를 남기려던 코드가 그 자체로 또 다른
-        // 예외를 던지는 건 본말전도라 여기서 미리 치환한다.
+        // null byte 포함 파일명(과거 "shell.php\0.jpg"류 우회 기법)은 즉시 거부
+        // -> 원본 그대로 로그에 남기면 Postgres가 null byte를 저장 못 해 예외가 나서 여기서 미리 이스케이프
         if (rawFilename != null && rawFilename.indexOf(NULL_BYTE) >= 0) {
             reject(rawFilename.replace("\0", "\\0"), null, "허용되지 않는 파일명입니다");
         }
@@ -75,26 +70,26 @@ public class FileUploadService {
             throw new UncheckedIOException(e);
         }
 
-        // 1단계: 콘텐츠만으로 실제 형식 판별 — 클라이언트가 보낸 MIME 타입은 참고하지 않는다.
+        // 1단계: 콘텐츠만으로 실제 형식 판별 — 클라이언트가 보낸 MIME 타입은 참고하지 않는다
         String realExtension = FileSignatureDetector.detect(content, analyzer.claimedExtension());
 
-        // 2단계: 이중 확장자.
+        // 2단계: 이중 확장자
         if (analyzer.isDoubleExtension()) {
             reject(analyzer.basename(), realExtension, "허용되지 않는 파일명입니다 (이중 확장자)");
         }
 
-        // 3단계: 확장자 위장 — 애초에 확장자를 주장하지 않은 파일은 비교 대상이 없어 건너뛴다.
+        // 3단계: 확장자 위장 — 애초에 확장자를 주장하지 않은 파일은 비교 대상이 없어 건너뛴다
         if (analyzer.hasExtension() && !analyzer.claimedExtension().equals(realExtension)) {
             reject(analyzer.basename(), realExtension, "파일의 실제 형식과 확장자가 일치하지 않습니다");
         }
 
-        // 4단계: 현재 차단 정책을 매 요청마다 새로 조회(캐시 금지)해 실제 확장자 기준으로 검사.
+        // 4단계: 현재 차단 정책을 매 요청마다 새로 조회(캐시 금지)해 실제 확장자 기준으로 검사
         Set<String> blockedExtensions = extensionPolicyService.getCurrentlyBlockedExtensions();
         if (blockedExtensions.contains(realExtension)) {
             reject(analyzer.basename(), realExtension, "차단된 확장자입니다: ." + realExtension);
         }
 
-        // 5단계: 특수 파일명 치환 — 1~4단계를 모두 통과한 파일에만 적용된다.
+        // 5단계: 특수 파일명 치환 — 1~4단계를 모두 통과한 파일에만 적용된다
         String logicalStoredName = analyzer.needsSpecialNaming()
                 ? Instant.now().getEpochSecond() + "." + realExtension
                 : analyzer.basename();
@@ -126,12 +121,7 @@ public class FileUploadService {
         throw new UploadRejectedException(reason);
     }
 
-    /**
-     * 저장된 파일에서 실행 권한을 제거한다. 1차 방어선은 애초에 웹에서 서빙되지 않는
-     * 경로({@code app.upload.dir}, 정적 리소스 경로 밖)에 저장하는 것이지만, 나중에
-     * 설정 실수로 그 경로가 정적 리소스로 노출되더라도 파일 자체가 실행 불가능하도록
-     * 방어를 한 겹 더 둔다.
-     */
+    /** 저장 경로가 실수로 노출되는 경우에 대비해 파일의 실행 권한을 미리 제거한다. */
     private void restrictPermissionsIfSupported(Path path) throws IOException {
         try {
             Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-r-----"));
