@@ -1,6 +1,8 @@
 package com.feb.extension_blocker.extension;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,4 +24,13 @@ public interface ExtensionPolicyRepository extends JpaRepository<ExtensionPolicy
     boolean existsByTypeAndExtensionIgnoreCase(ExtensionType type, String extension);
 
     long countByType(ExtensionType type);
+
+    /**
+     * PostgreSQL 트랜잭션 범위 advisory lock을 건다.
+     * 같은 {@code key}로 이미 잠긴 상태라면 그 트랜잭션이 끝날 때까지 대기하고, 끝나면 자동으로 풀림
+     * {@link ExtensionPolicyService#addCustomExtension}의 "개수 확인
+     * -> insert" 구간을 사실상 하나의 원자적 구간으로 만들어, 커스텀 확장자가 200개를 초과하는 것을 방지
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(:key)", nativeQuery = true)
+    void lockForCustomExtensionInsert(@Param("key") long key);
 }

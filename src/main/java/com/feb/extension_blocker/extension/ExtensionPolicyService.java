@@ -34,6 +34,11 @@ public class ExtensionPolicyService {
     private static final int CUSTOM_EXTENSION_MAX_COUNT = 200;
     /** Pattern은 한 번만 컴파일하여 재사용 */
     private static final Pattern ALPHANUMERIC = Pattern.compile("^[A-Za-z0-9]+$");
+    /**
+     * {@link ExtensionPolicyRepository#lockForCustomExtensionInsert}에 쓰는 advisory lock
+     * 키. DB 전체에서 이 락 하나만 쓰므로 값 자체엔 의미가 없고, 충돌만 안 나면 된다.
+     */
+    private static final long CUSTOM_EXTENSION_INSERT_LOCK_KEY = 1L;
 
     private final ExtensionPolicyRepository extensionPolicyRepository;
 
@@ -82,6 +87,7 @@ public class ExtensionPolicyService {
      *
      * <ol>
      *   <li>{@link #normalize}로 공백 제거 및 영문/숫자 이외 문자를 걸러낸다.</li>
+     *   <li>advisory lock으로 이 메서드의 나머지 부분을 다른 호출과 직렬화한다.</li>
      *   <li>고정 확장자와 겹치는지, 이미 등록된 커스텀 확장자인지 검사한다.</li>
      *   <li>커스텀 확장자가 200개 상한을 넘었는지 검사한다.</li>
      * </ol>
@@ -89,6 +95,10 @@ public class ExtensionPolicyService {
     @Transactional
     public ExtensionPolicy addCustomExtension(String rawInput) {
         String normalized = normalize(rawInput);
+
+        // 이 메서드가 커밋/롤백할 때까지
+        // 다른 호출을 대기시켜 개수 확인 후 insert하는 구간을 사실상 원자적으로 만듬
+        extensionPolicyRepository.lockForCustomExtensionInsert(CUSTOM_EXTENSION_INSERT_LOCK_KEY);
 
         if (extensionPolicyRepository.existsByTypeAndExtensionIgnoreCase(ExtensionType.FIXED, normalized)) {
             throw new ExtensionValidationException("고정 확장자에 있는 확장자입니다");
@@ -103,8 +113,9 @@ public class ExtensionPolicyService {
         try {
             return extensionPolicyRepository.save(new ExtensionPolicy(normalized, ExtensionType.CUSTOM, true));
         } catch (DataIntegrityViolationException raceLostToConcurrentInsert) {
-            // 이 catch 자체는 경쟁 상태를 막지 않음
-            // 대신 DB 유니크 인덱스가 막음
+            // advisory lock이 있는 한 이 catch는 정상 경로에서 사실상 안 탄다(동시 요청이
+            // 위 lock에서 이미 순서대로 걸러짐). 그래도 락 자체가 어떤 이유로 우회되는
+            // 경우에 대비한 최종 방어선으로 DB 유니크 인덱스를 남겨둔다.
             throw new ExtensionValidationException("이미 등록된 확장자입니다");
         }
     }
