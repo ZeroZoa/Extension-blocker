@@ -2,9 +2,15 @@
 
 파일 확장자 차단 정책을 관리하고, 실제 파일 업로드 시 그 정책을 강제하는 시스템입니다. Spring Boot 백엔드와 React 프론트엔드로 구성된 모노레포입니다.
 
-- **배포된 사이트**: _(배포 후 URL 기입 예정)_
+- **배포된 사이트**: https://extension-blocker.vercel.app/
 - **고려사항 문서**: [CONSIDERATIONS.md](CONSIDERATIONS.md)
 - **AI 활용 기록**: [PROMPT_LOG.md](PROMPT_LOG.md)
+
+### 느낀 점
+
+이전 프로젝트에서는 이미지 업로드에 확장자 화이트리스트를 구현해본적이 있습니다. 이미지만 올리면 되는 용도였기 때문입니다. 확장자 스푸핑은 업로드 직후 이미지를 디코딩하는 과정에서 실패하도록 해 필터링했습니다.
+
+이전에 다뤄본 문제라 가볍게 생각했습니다. 막상 이번 과제는 기존 프로젝트와 정반대의 요구사항이였고, 과제 전에는 화이트리스트가 대부분의 상황에서 정답이라고 생각했는데, 그건 업로드할 파일이 좁은 환경에서의 관점이였고, 범용적인 파일을 업로드해야 하는 환경에서는 블랙리스트 기법이 의도에 맞는 설계라는 점을 느꼈습니다.
 
 ---
 
@@ -26,7 +32,7 @@
 | Backend | Java 21, Spring Boot 4.1.1, Spring Data JPA, Bean Validation, Gradle |
 | Frontend | React, TypeScript, Vite |
 | DB | PostgreSQL 16 |
-| 배포(예정) | Render(백엔드) + Vercel(프론트엔드) |
+| 배포 | Render(백엔드) + Vercel(프론트엔드) |
 
 ---
 
@@ -202,5 +208,3 @@ DB_URL=jdbc:postgresql://localhost:5432/extblocker ./gradlew test
 - **백엔드**: Render, `Dockerfile` 기반 배포
 - **프론트엔드**: Vercel, Root Directory를 `frontend`로 지정
 - 배포 시 백엔드의 `CORS_ALLOWED_ORIGINS`를 실제 Vercel 배포 URL로, 프론트엔드의 `VITE_API_BASE_URL`을 실제 Render 배포 URL로 설정해야 합니다.
-
-_(배포 완료 후 실제 URL과 세부 사항을 이 섹션에 갱신 예정)_
